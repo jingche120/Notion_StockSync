@@ -103,6 +103,46 @@ def _fetch_snapshot_lookup() -> Dict[str, dict]:
     return lookup
 
 
+def fetch_close_price_map(
+    all_stock_codes: List[str],
+    base_data: Dict[str, float],
+) -> Dict[str, float]:
+    """盤後用：一次快照抓全市場，回傳 {股票代碼: 收盤價}。
+
+    取價順序：closePrice → lastPrice → 沿用舊基準價（與 fugle 舊路行為一致：
+    查無代碼＝下市、當日零成交＝無 close/lastPrice，都不能讓基準檔缺洞）。
+    快照整批失敗時回傳空 dict，由呼叫端決定退路（fugle 舊路）。
+    """
+    lookup = _fetch_snapshot_lookup()  # 重用既有登入單例與四市場合併查表
+    if not lookup:
+        logger.error("[富邦] 盤後快照無資料，回傳空 map 交由呼叫端退路處理。")
+        return {}
+
+    price_map: Dict[str, float] = {}
+    fallback_count = 0
+    for code in all_stock_codes:
+        item = lookup.get(code)
+        price = None
+        if item is not None:
+            # 一律用 is None 判斷，避免價格 0 被 or 誤判為缺值
+            price = item.get("closePrice")
+            if price is None:
+                price = item.get("lastPrice")
+        if price is not None:
+            price_map[code] = float(price)
+        else:
+            # 查無代碼（下市）或當日零成交 → 沿用舊基準價
+            price_map[code] = float(base_data.get(code, 0.0))
+            fallback_count += 1
+            logger.debug(f"[富邦][盤後] {code} 快照無價格，沿用舊基準價 {price_map[code]}。")
+
+    logger.info(
+        f"[富邦][盤後] 收盤價蒐集完成：共 {len(price_map)} 筆，"
+        f"其中 {fallback_count} 筆沿用舊基準價（零成交/查無）。"
+    )
+    return price_map
+
+
 def _emit_packet(
     stock_code: str,
     item: dict,

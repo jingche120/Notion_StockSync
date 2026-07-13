@@ -39,7 +39,8 @@ pip install -r requirements.txt
 | `RESERVE_STOCK_API_KEYS` | 第二次重試時使用的備用 Fugle 金鑰 |
 | `LATEST_CHANCE_STOCK_API_KEYS` | 第三次重試（最後機會）使用的 Fugle 金鑰 |
 | `NOTION_API_KEY_LIST` | 逗號分隔的 Notion API 金鑰（一把金鑰對應一個 `Notion_update_worker` 執行緒） |
-| `SENDER_EMAIL` / `SENDER_APP_PASSWORD` | Zoho SMTP 憑證 |
+| `SENDER_EMAIL` / `SENDER_APP_PASSWORD` | 寄信 SMTP 憑證（Gmail 信箱 + Google 應用程式密碼） |
+| `SMTP_SERVER` / `SMTP_PORT` | SMTP 伺服器，預設 `smtp.gmail.com` / `465`（SSL），一般不需設定 |
 | `MARKET_OPEN_TIME` / `MARKET_CLOSE_TIME` | 覆寫交易時間，用於測試（格式 `HH:MM`） |
 | `PRICE_SOURCE` | 抓價來源切換：`fubon`（富邦快照，預設建議）或 `fugle`（舊路，退路） |
 | `FUBON_ACCOUNT` / `FUBON_PASSWORD` / `FUBON_CERT_PATH` | 富邦證券登入帳密與 `.pfx` 憑證路徑（`PRICE_SOURCE=fubon` 時需要） |

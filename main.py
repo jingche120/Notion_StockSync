@@ -373,39 +373,54 @@ def run_post_market_tasks(
 
     logger.info("-" * 20)
 
-    # --- 任務二：使用即時 API，全面抓取所有股票的最終價格 ---
+    # --- 任務二：全面抓取所有股票的最終價格 ---
     logger.info("[盤後任務 Step 2/3] 開始全面抓取收盤價，準備更新基準檔案...")
-    
+
     # 這就是您提到的 prepare_for_post 字典，我們稱之為 final_price_map
     final_price_map = {}
-    result_queue = queue.Queue()
-    chunks = split_list_into_n_chunks_numpy(all_stock_codes,len(config.STOCK_API_KEY))
-    threads = []
-    logger.info("盤後: 使用多工人去富果抓收盤價")
 
-    for i, chunk in enumerate(chunks):
-        if i < len(config.STOCK_API_KEY):
-            api_key = config.STOCK_API_KEY[i]
-            thread = threading.Thread(
-                target=run_post_market_tasks_worker, 
-                args=(i + 1, config.STOCK_API_KEY[i], chunk,base_data,result_queue)
-            )
-            threads.append(thread)
-            thread.start() # 啟動工人！讓他開始工作
-            logger.info(f"初始化_工人 {i+1} 已派出，任務列表 (共 {len(chunk)} 項)。")
+    # 優先：富邦快照（1 次呼叫抓全市場，無 rate limit）
+    if config.PRICE_SOURCE == "fubon":
+        try:
+            from workers.fubon_producer import fetch_close_price_map  # 延遲匯入，與核心循環同模式
+            logger.info("盤後: 使用富邦快照一次抓取全市場收盤價...")
+            final_price_map = fetch_close_price_map(all_stock_codes, base_data)
+        except Exception as e:
+            logger.error(f"❌ 富邦快照抓收盤價時發生錯誤: {e}", exc_info=True)
+            final_price_map = {}
+        if not final_price_map:
+            logger.warning("⚠️ 富邦快照整批失敗，自動退回 fugle 舊路抓收盤價...")
 
-    # 4. 等待所有工人完成工作
-    for thread in threads:
-        thread.join()
+    # fugle 路：PRICE_SOURCE=fugle 走這裡；富邦整批失敗也自動退到這裡
+    if not final_price_map:
+        result_queue = queue.Queue()
+        chunks = split_list_into_n_chunks_numpy(all_stock_codes,len(config.STOCK_API_KEY))
+        threads = []
+        logger.info("盤後: 使用多工人去富果抓收盤價")
 
-    # ⭐ 關鍵 3: 從佇列中取出所有工人的成果，並合併到主字典中
-    logger.info("所有盤後工人已收工，開始合併結果...")
-    while not result_queue.empty():
-        worker_result = result_queue.get()
-        logger.debug(f"從佇列合併了 {len(worker_result)} 筆來自工人的價格資料。")
-        final_price_map.update(worker_result)
+        for i, chunk in enumerate(chunks):
+            if i < len(config.STOCK_API_KEY):
+                api_key = config.STOCK_API_KEY[i]
+                thread = threading.Thread(
+                    target=run_post_market_tasks_worker,
+                    args=(i + 1, config.STOCK_API_KEY[i], chunk,base_data,result_queue)
+                )
+                threads.append(thread)
+                thread.start() # 啟動工人！讓他開始工作
+                logger.info(f"初始化_工人 {i+1} 已派出，任務列表 (共 {len(chunk)} 項)。")
 
-    logger.info(f"✔ 已成功蒐集 {len(final_price_map)} 筆股票的最終價格。")    
+        # 4. 等待所有工人完成工作
+        for thread in threads:
+            thread.join()
+
+        # ⭐ 關鍵 3: 從佇列中取出所有工人的成果，並合併到主字典中
+        logger.info("所有盤後工人已收工，開始合併結果...")
+        while not result_queue.empty():
+            worker_result = result_queue.get()
+            logger.debug(f"從佇列合併了 {len(worker_result)} 筆來自工人的價格資料。")
+            final_price_map.update(worker_result)
+
+    logger.info(f"✔ 已成功蒐集 {len(final_price_map)} 筆股票的最終價格。")
     # --- 任務三：使用蒐集好的字典，一次性更新基準檔案 ---
     logger.info("[盤後任務 Step 3/3] 開始將最終價格寫回基準檔案...")
     try:
@@ -454,7 +469,9 @@ if __name__ == "__main__":
     # 【優化】在主程式啟動時，只建立一次 Mailer 物件
     email_sender  = EmailSender(
         sender_email=config.SENDER_EMAIL,
-        app_password=config.SENDER_APP_PASSWORD
+        app_password=config.SENDER_APP_PASSWORD,
+        smtp_server=config.SMTP_SERVER,
+        smtp_port=config.SMTP_PORT
     )
     # 初始化
     #step 1先把昨天的大盤指數刪掉

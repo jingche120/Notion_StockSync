@@ -48,6 +48,9 @@ NOTION_EMAIL = os.getenv("NOTION_EMAIL")
 NOTION_PASSWORD = os.getenv("NOTION_PASSWORD")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 SENDER_APP_PASSWORD = os.getenv("SENDER_APP_PASSWORD")
+# SMTP 伺服器（預設 Gmail；SENDER_APP_PASSWORD 用 Google 帳戶的 16 碼應用程式密碼）
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
 
 # 富果
 stock_api_keys_str = os.getenv("STOCK_API_KEYS", "")

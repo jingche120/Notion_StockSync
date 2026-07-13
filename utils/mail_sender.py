@@ -12,13 +12,13 @@ class EmailSender:
     """
     一個使用 mail 的 SMTP 服務來寄送郵件的物件。
     """
-    def __init__(self, sender_email: str, app_password: str,smtp_server: str = "smtp.zoho.com",smtp_port: int = 465):
+    def __init__(self, sender_email: str, app_password: str,smtp_server: str = "smtp.gmail.com",smtp_port: int = 465):
         """
         初始化寄送器。
 
         Args:
-            sender_email (str): 您用來寄信的地址 (例如您的 Zoho 信箱)。
-            app_password (str): 您的 16 位元應用程式密碼。
+            sender_email (str): 您用來寄信的地址 (例如您的 Gmail 信箱)。
+            app_password (str): 您的 16 位元應用程式密碼（Google 帳戶 → 安全性 → 應用程式密碼）。
             smtp_server (str): SMTP 伺服器位址。
             smtp_port (int): SMTP 伺服器埠號 (465 for SSL)。
         """
@@ -72,7 +72,7 @@ class EmailSender:
             <p><b>溫馨提醒：</b><br>若您未取消"email"提醒，在股價持續符合條件期間，系統將會定期寄送本通知信。</p>
 
             <p><b>免責聲明：</b><br>本服務資訊僅供參考，不構成投資建議。所有股價資訊應以券商實際成交價為準。</p>
-            <p>如有任何問題，請聯絡<a href="mailto:service@soulation.store"><i>service@soulation.store</i></a></p>
+            <p>如有任何問題，請聯絡<a href="mailto:{self.sender_email}"><i>{self.sender_email}</i></a></p>
             <small>(這是一封提醒信件，您可以直接回覆)</small>
         </body></html>
         """
