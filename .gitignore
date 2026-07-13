@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.pyc
+/venv
+/.venv
+not_to_git/
+# Environment variables
+.env
+
+# VIP 用戶設定（含 email 與 Notion DB ID，機密）
+# 內容改放 .env 的 USER_CONFIGS_JSON；範例格式見 utils/users.example.json
+utils/users.json
+
+# Data and Log files
+# 忽略所有 .zip 和 .pdf 檔案
+*.zip
+*.pdf
+*.log
+log/ 
+*.log.*
+# 忽略資料檔
+df_base_data.json
+
+# IDE/Editor specific
+.vscode/
+.idea/
+.chrome-win64/
+chrome-win64/
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Local scratch / IDE agent files
+temp.ipynb
+non_listed_report.json
+fugle_ratelimit_test.py
+fubon_probe.py
+test0622.py
+.claude/
+
+# --- 個人／冗餘工作檔：留在本地即可，不上傳 GitHub ---
+# 全原始碼串接的 AI context 檔（可用 create_context.sh 重新產生，且與原始碼重複）
+project_context.md
+create_context.sh
+# 綁定舊機器路徑的 git 腳本、編碼壞掉的個人 debug 筆記
+git_push.sh
+git_pull.sh
+debug.md
+# 某天的股價快照暫存檔
+0731.json
+help_me_check/
+# 個人重啟測試清單與參考 notebook（無機密，想上傳可移除本行）
+restart_checklist.md
+python_sample_code.ipynb
+
+# 富邦 SDK 安裝檔（肥、綁平台，從富邦官方下載即可）
+*.whl
+
+# 憑證 / 金鑰（機密，絕對不能進版控！）
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt

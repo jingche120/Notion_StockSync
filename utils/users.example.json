@@ -1,0 +1,9 @@
+[
+    {
+        "order": "Me",
+        "email": "your_email@example.com",
+        "DB_URL": "https://app.notion.com/p/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX?v=YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+        "DB_ID": "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX",
+        "VVIP": "true"
+    }
+]
