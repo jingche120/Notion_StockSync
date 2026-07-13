@@ -128,10 +128,10 @@ def produce_with_fugle(task_q, master_vip_list, master_normal_list, base_data,
     logger.info("[Info] 所有 API Worker 已完成數據抓取。")
 
 
-def run_5_minute_core_loop(base_data: Dict[str, float], all_stock_codes: List[str],mailer: EmailSender,api_notion_failure_q: queue.Queue,email_failure_q: queue.Queue,is_close: Optional[bool] = False):
-    """執行一個完整的5分鐘核心循環。"""
+def run_core_loop(base_data: Dict[str, float], all_stock_codes: List[str],mailer: EmailSender,api_notion_failure_q: queue.Queue,email_failure_q: queue.Queue,is_close: Optional[bool] = False):
+    """執行一個完整的核心循環（週期由 config.CORE_LOOP_DURATION_SECONDS 決定）。"""
     loop_start_time = time.time()
-    logger.info(f"\n--- {datetime.datetime.now()} | 開始新一輪 5 分鐘核心循環 ---")
+    logger.info(f"\n--- {datetime.datetime.now()} | 開始新一輪核心循環 ---")
 
     # --- 任務一：抓取新聞（與 1 分鐘股價更新解耦，最多每 5 分鐘跑一次）---
     global _last_news_scrape_time
@@ -161,11 +161,11 @@ def run_5_minute_core_loop(base_data: Dict[str, float], all_stock_codes: List[st
     vip_database_dataframe_dist = {} # 預設為空字典    
 
     try:
-        # === VIP/email 暫時關閉：本輪只更新主資料庫 ===
-        # 保持上方 unique_stock_codes_set/vip_database_dataframe_dist 為空，
-        # 下游 master_vip_list 即為空、封包維持 4 元素，VIP watchlist 更新與寄信會自動跳過。
-        # 之後要重新啟用，取消註解以下 notion_api_for_vip 呼叫與其 log 區塊即可。
-        logger.info("[Step 2] VIP 抓取已暫時關閉，本輪只更新主資料庫。")
+        # === VIP/VVIP 啟用中 ===
+        # 抓各用戶自選股，組出 unique_stock_codes_set / vip_database_dataframe_dist，
+        # 下游據此產生 master_vip_list，封包帶第 5 元素 user_details_list，
+        # VIP watchlist 狀態更新照常執行；VVIP 到價（且狀態改變）時額外寄 email。
+        logger.info("[Step 2] 抓取 VIP/VVIP 自選股資料...")
         unique_stock_codes_set, vip_database_dataframe_dist = notion_api_for_vip(config.USER_CONFIGS)
 
         logger.info(f"存取 VIP Watchlists 完成，共找到 {len(unique_stock_codes_set)} 支獨特 VIP 股票。")
@@ -326,10 +326,10 @@ def run_post_market_tasks(
     # ✅ 1. 為盤後任務建立【所有】需要的失敗佇列
     api_notion_failures_post_market = queue.Queue()
     email_failures_post_market = queue.Queue()
-    # --- 任務一：執行最後一次的 5 分鐘核心循環，確保所有通知都已處理 ---
+    # --- 任務一：執行最後一次的核心循環，確保所有通知都已處理 ---
     logger.info("[盤後任務 Step 1/3] 執行最後一次價格檢查與 VIP 通知...")
     try:
-        run_5_minute_core_loop(base_data, all_stock_codes, mailer, api_notion_failure_q=api_notion_failures_post_market,email_failure_q=email_failures_post_market,is_close=True)
+        run_core_loop(base_data, all_stock_codes, mailer, api_notion_failure_q=api_notion_failures_post_market,email_failure_q=email_failures_post_market,is_close=True)
         logger.info("✔ 最後一次核心循環執行完畢。")
     except Exception as e:
         logger.error(f"❌ 執行最後一次核心循環時發生錯誤: {e}", exc_info=True)
@@ -529,7 +529,7 @@ if __name__ == "__main__":
     while get_current_state() == "IN_MARKET":
         api_and_notion_failures = queue.Queue()
         email_failures   = queue.Queue()
-        run_5_minute_core_loop(base_data, all_stock_codes,email_sender,api_notion_failure_q=api_and_notion_failures,email_failure_q=email_failures )
+        run_core_loop(base_data, all_stock_codes,email_sender,api_notion_failure_q=api_and_notion_failures,email_failure_q=email_failures )
 
         # 3. 核心函式執行完畢後，立刻檢查並處理這次循環中發生的所有失敗
         if not api_and_notion_failures.empty():

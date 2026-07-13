@@ -52,16 +52,16 @@ pip install -r requirements.txt
 
 - **啟動**：清除 Notion 中前一日的大盤指數資料，將所有股票重置為 `"default"` 顏色與 `"--"` 漲跌幅。
 - **PRE_MARKET**：每 60 秒檢查一次，等待至 `MARKET_OPEN_TIME`。
-- **IN_MARKET**：重複執行 `run_5_minute_core_loop()`，直到 `MARKET_CLOSE_TIME`。
+- **IN_MARKET**：重複執行 `run_core_loop()`，直到 `MARKET_CLOSE_TIME`。
 - **POST_MARKET**：執行一次 `run_post_market_tasks()`，然後結束程式。
 
-### 五分鐘核心循環（`run_5_minute_core_loop`）
-每次迭代：
+### 核心循環（`run_core_loop`）
+循環週期由 `config.CORE_LOOP_DURATION_SECONDS` 決定（目前為 180 秒＝3 分鐘）。每次迭代：
 1. 透過 Selenium 爬取新聞與台股加權指數（`news_scraper.py`）
 2. 從各 VIP 用戶的 Notion 資料庫抓取其自選股清單（`notion_api_for_vip`）
 3. 建立 `N` 個 `API_Worker` 執行緒（N = Fugle 金鑰數量）與 `M` 個 `Notion_update_worker` 執行緒（M = Notion 金鑰數量）
 4. 所有工人共用同一個 `task_q`；`API_Worker` 負責生產，`Notion_update_worker` 負責消費
-5. 五分鐘視窗內剩餘的時間用來 sleep
+5. 循環視窗內剩餘的時間用來 sleep
 
 ### 抓價來源（`PRICE_SOURCE`）
 核心循環的「生產者」依 `PRICE_SOURCE` 切換，兩條路產出的 task 封包格式相同（共用 `utils/task_builder.py` 的 `build_task_packet`），下游 `Notion_update_worker` 不受影響：

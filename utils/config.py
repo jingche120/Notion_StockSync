@@ -102,7 +102,7 @@ MAIN_DATABASE_ID = "3846bce3-ed2c-8016-bdea-000bbc31c1fd"
 
 # --- 效能與週期設定 (Non-sensitive) ---
 # 富邦快照模式：核心循環改為 1 分鐘一輪（原 Fugle 受限流為 5 分鐘）。
-CORE_LOOP_DURATION_SECONDS = 60   # 1 minute (as an integer)
+CORE_LOOP_DURATION_SECONDS = 180   # 3 minute (as an integer)
 QUEUE_CHECK_TIME_SECONDS = 285   # 4 minutes 45 seconds (as an integer)
 # 新聞爬蟲與股價更新解耦：新聞最多每 NEWS_SCRAPE_INTERVAL_SECONDS 秒才跑一次。
 NEWS_SCRAPE_INTERVAL_SECONDS = 300  # 5 minutes

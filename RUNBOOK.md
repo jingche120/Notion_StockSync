@@ -9,7 +9,7 @@
 
 ## 這個專案在做什麼
 
-一個在台灣股市交易時段（09:00–13:30）運行的監控服務，每 **1 分鐘**做一輪：
+一個在台灣股市交易時段（09:00–13:30）運行的監控服務，每 **3 分鐘**做一輪（週期由 `CORE_LOOP_DURATION_SECONDS` 決定）：
 
 1. **抓即時股價**，把漲跌以紅／綠顏色 + 漲跌幅更新到 **Notion 主資料庫**。抓價來源可切換（見下方 `PRICE_SOURCE`）：**富邦 snapshot（建議，一次抓全市場）** 或 Fugle 逐支輪詢（退路）。
 2. **爬財經新聞與台股加權指數**（Selenium 開無頭 Chrome），寫回 Notion。
@@ -41,16 +41,16 @@
   │
   │   PRE_MARKET（盤前）  ── 每 60 秒檢查一次，等到開盤時間
   │        │
-  │   IN_MARKET（盤中）   ── 重複跑 run_5_minute_core_loop() 直到收盤
+  │   IN_MARKET（盤中）   ── 重複跑 run_core_loop() 直到收盤
   │        │
   │   POST_MARKET（盤後） ── 跑一次 run_post_market_tasks() 後結束程式
   │
   └─ 系統關閉
 ```
 
-### 核心迴圈 `run_5_minute_core_loop()`（[main.py](main.py)）
+### 核心迴圈 `run_core_loop()`（[main.py](main.py)）
 
-> 函式名雖叫 `run_5_minute_core_loop`，但實際循環週期已改為 **1 分鐘**（`CORE_LOOP_DURATION_SECONDS = 60`）。新聞已與股價更新解耦，最多每 `NEWS_SCRAPE_INTERVAL_SECONDS`（300 秒）才跑一次。
+> 循環週期由 `CORE_LOOP_DURATION_SECONDS` 決定，目前為 **3 分鐘**（180 秒）。新聞已與股價更新解耦，最多每 `NEWS_SCRAPE_INTERVAL_SECONDS`（300 秒）才跑一次。
 
 ```
 [Step 1] 爬新聞 + 加權指數  → 寫進 Notion          (news_scraper.py) ← ⚠️ 目前停用（整段註解）
@@ -68,7 +68,7 @@
          生產者跑完 → 對佇列放 M 個 None 當結束信號
          → 等所有 Notion_update_worker 收工
          → 收集失敗清單寫進 log
-         → 用迴圈剩下的時間 sleep（湊滿 1 分鐘）
+         → 用迴圈剩下的時間 sleep（湊滿一輪週期）
 ```
 
 ### 生產者／消費者
@@ -202,7 +202,7 @@ python test_notion_worker.py   # 真實驗證 Notion 更新流程
 
 | 檔案 | 用途 |
 |---|---|
-| [main.py](main.py) | 進入點：初始化 + 市場狀態機 + 五分鐘迴圈 + 盤後結算 |
+| [main.py](main.py) | 進入點：初始化 + 市場狀態機 + 核心迴圈 + 盤後結算 |
 | [news_scraper.py](news_scraper.py) | Selenium 爬新聞與加權指數，寫回 Notion（**目前停用**） |
 | [workers/fubon_producer.py](workers/fubon_producer.py) | 生產者（**建議**）：富邦 snapshot 一次抓全市場、登入單例、分鐘級去重 |
 | [workers/api_worker.py](workers/api_worker.py) | 生產者（退路）：抓 Fugle 股價（含節流/404/429 處理）、打包任務 |

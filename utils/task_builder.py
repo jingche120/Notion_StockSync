@@ -11,11 +11,21 @@
 顏色： "RED"(漲) / "GREEN"(跌)
 """
 import logging
+import threading
 from typing import Dict, List, Optional
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# 記憶每個 (order_id, stock_code) 上一輪的到價 status，用來偵測「狀態改變」。
+# 放 module 層級的理由：task_builder 同時被 fubon 單執行緒路與 fugle 多執行緒路重用，
+# 記憶集中於此可讓兩路一致；fugle 路多執行緒共用，故以鎖保護。
+_last_status_seen: Dict[tuple, str] = {}
+_status_lock = threading.Lock()
+
+# 只有這兩種 status 算「真正到價」，才可能寄信（「在目標價之間」不寄）。
+_ALERT_STATUSES = {"股價高於目標價_高", "股價低於目標價_低"}
 
 
 def _build_vip_user_details(
@@ -72,9 +82,17 @@ def _build_vip_user_details(
             'status': status,
         }
 
-        # VVIP 且該行「是否通知」== email → 額外標記 email_needed，下游才會寄信
+        # VVIP 且該行「是否通知」== email 才有寄信資格；
+        # 再加兩道過濾：只有「真正到價（高於/低於）」且「狀態相較上一輪有改變」才寄，
+        # 以免價格在區間內也寄、以及每 5 分鐘循環重複轟炸同一封信。
         if order_id in vvip_list and stock_setting.get('是否通知') == 'email':
-            detail['email_needed'] = True
+            key = (order_id, stock_code)
+            with _status_lock:
+                prev_status = _last_status_seen.get(key)
+                if status in _ALERT_STATUSES and status != prev_status:
+                    detail['email_needed'] = True
+                # 不論寄不寄，都更新記憶，供下一輪比對
+                _last_status_seen[key] = status
 
         user_details_list.append(detail)
 

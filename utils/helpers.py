@@ -45,7 +45,9 @@ def split_list_into_n_chunks_numpy(all_stock_codes: List[Any], n: int) -> List[L
         logger.error(f"切分的份數 n (notion_api工人的數目)必須是正整數。")
         raise ValueError("切分的份數 n (notion_api工人的數目)必須是正整數。")
     if not all_stock_codes:
-        logger.error(f"df_base_data.json裡面的key值為空。")
+        # 注意：此函式為通用切分工具（初始化主DB、關聯查詢等多處共用），
+        # 收到空列表不一定是 df_base_data.json 的問題，訊息保持中性以免誤導除錯方向。
+        logger.warning(f"要切分的列表為空，回傳 {n} 個空清單。")
 
         return [[] for _ in range(n)] # 如果是空列表，回傳 n 個空列表
 
@@ -53,6 +55,26 @@ def split_list_into_n_chunks_numpy(all_stock_codes: List[Any], n: int) -> List[L
     split_arrays = np.array_split(all_stock_codes, n)
     # 將結果從 numpy array 轉回 python list
     return [arr.tolist() for arr in split_arrays]
+
+
+def _rollup_first_plain_text(prop: Dict[str, Any], default: str) -> str:
+    """從 rollup(array) 屬性中安全取出第一筆的 plain_text（支援 rich_text / title / number）。
+
+    對應新版 VIP 自選股 schema：「想追蹤公司」「即時價格」「漲跌幅」等欄位
+    是透過「股票名稱」relation 彙總（show_original）出來的 rollup，值已直接可用。
+    """
+    arr = prop.get("rollup", {}).get("array", [])
+    if not arr:
+        return default
+    first = arr[0]
+    inner_type = first.get("type")
+    if inner_type == "number":
+        num = first.get("number")
+        return str(num) if num is not None else default
+    text_list = first.get(inner_type, []) if inner_type else []
+    if text_list and isinstance(text_list, list):
+        return text_list[0].get("plain_text", default)
+    return default
 
 
 # 建立notion_api去找關聯DB的工人
@@ -115,36 +137,43 @@ def for_each_vip_to_fetch_notion_data(api_key: str, data_source_id: str) -> Opti
     header_list = ["編號", "想追蹤的公司", "股票代碼", "即時價格", "漲跌幅", "目標價_低", "目標價_高", "狀態", "是否通知", "備註"]
     
     # 建立一個列表，存放所有需要一次性查詢的關聯頁面 ID
+    # 【schema 相容】「想追蹤公司」有兩種可能：
+    #   - relation（舊 schema）：需要抓關聯頁面才能拿到股票代碼等資料
+    #   - rollup（新 schema）：代碼已由 rollup 直接給出，不需要再查關聯頁面
     relation_ids_to_fetch = []
     for page in all_pages:
+        follow_prop = page.get("properties", {}).get("想追蹤公司", {})
+        if follow_prop.get("type") != "relation":
+            continue  # rollup 新 schema：跳過，不需抓關聯頁
         try:
-            relation_id = page["properties"]["想追蹤公司"]["relation"][0]["id"]
+            relation_id = follow_prop["relation"][0]["id"]
             relation_ids_to_fetch.append(relation_id)
         except (KeyError, IndexError):
             continue
-            
+
     # ⭐ 步驟二：【核心修改】將任務分配給多個工人同時執行
     relation_pages_data = {}  # 準備一個空的字典，讓所有工人把結果放進來
     threads = []
-    num_workers = 2 # 您指定使用 2 個線程
-    # 將任務列表切成 2 份
-    chunks = split_list_into_n_chunks_numpy(relation_ids_to_fetch, num_workers)
-    
-    for i, chunk in enumerate(chunks):
-        if not chunk: continue # 如果某個塊是空的，就跳過
-        
-        # 建立一個執行緒 (工人)
-        thread = threading.Thread(
-            target=fetch_relation_page_worker, # 告訴工人要去哪個函式工作
-            args=(api_key, chunk, relation_pages_data, i + 1) # 把需要的工具和任務交給他
-        )
-        threads.append(thread)
-        thread.start() # 派出工人，讓他開始在背景工作
+    if relation_ids_to_fetch:  # rollup schema 下為空，直接略過派工
+        num_workers = 2 # 您指定使用 2 個線程
+        # 將任務列表切成 2 份
+        chunks = split_list_into_n_chunks_numpy(relation_ids_to_fetch, num_workers)
 
-    # ⭐ 步驟三：等待所有工人完成工作
-    for thread in threads:
-        thread.join() # 主程式會在這裡暫停，直到這位工人完成他的所有工作
-    logger.info(f"所有關聯查詢工人都已完成，共獲取 {len(relation_pages_data)} 筆詳細資料。")
+        for i, chunk in enumerate(chunks):
+            if not chunk: continue # 如果某個塊是空的，就跳過
+
+            # 建立一個執行緒 (工人)
+            thread = threading.Thread(
+                target=fetch_relation_page_worker, # 告訴工人要去哪個函式工作
+                args=(api_key, chunk, relation_pages_data, i + 1) # 把需要的工具和任務交給他
+            )
+            threads.append(thread)
+            thread.start() # 派出工人，讓他開始在背景工作
+
+        # ⭐ 步驟三：等待所有工人完成工作
+        for thread in threads:
+            thread.join() # 主程式會在這裡暫停，直到這位工人完成他的所有工作
+        logger.info(f"所有關聯查詢工人都已完成，共獲取 {len(relation_pages_data)} 筆詳細資料。")
 
     # 現在，我們帶著所有需要的資料，開始解析
     for page in all_pages:
@@ -183,10 +212,27 @@ def for_each_vip_to_fetch_notion_data(api_key: str, data_source_id: str) -> Opti
             #     row_note = ""
 
 
-            # --- 從預先抓好的關聯資料中取值 ---
-            # 首先，只安全地取得 relation 的「列表」本身
-            relation_list = properties.get("想追蹤公司", {}).get("relation", [])
-            if relation_list:
+            # --- 取得股票代碼等關聯資料（schema 相容：rollup 直讀 / relation 走關聯頁）---
+            follow_prop = properties.get("想追蹤公司", {})
+            follow_type = follow_prop.get("type")
+
+            if follow_type == "rollup":
+                # 新 schema：「想追蹤公司」是 rollup（經「股票名稱」relation 彙總出股票代碼），
+                # 「即時價格」「漲跌幅」同為 rollup，值直接可用，不需再查關聯頁面。
+                row_of_want_to_follow_company_code = _rollup_first_plain_text(follow_prop, 'N/A')
+                if row_of_want_to_follow_company_code == 'N/A':
+                    logger.warning(f"在資料庫 '{data_source_id}' 中發現一列 '{row_name}' 的『想追蹤公司』rollup 為空（尚未關聯股票），已跳過。")
+                    continue
+                # 公司名稱由代碼對照表反查（此欄僅供顯示，下游任務不使用）
+                row_of_want_to_follow_company = get_stock_name(
+                    row_of_want_to_follow_company_code, "stock_code_to_name_map") or 'N/A'
+                row_of_want_to_follow_company_price = _rollup_first_plain_text(
+                    properties.get('即時價格', {}), '0.0')
+                row_of_want_to_follow_company_percent = _rollup_first_plain_text(
+                    properties.get('漲跌幅', {}), '--')
+            elif follow_prop.get("relation", []):
+                # 舊 schema：relation，從預先抓好的關聯頁面資料中取值
+                relation_list = follow_prop.get("relation", [])
                 relation_id = relation_list[0].get("id")
                 relation_props = relation_pages_data.get(relation_id, {})
 
@@ -200,7 +246,7 @@ def for_each_vip_to_fetch_notion_data(api_key: str, data_source_id: str) -> Opti
                 row_of_want_to_follow_company_price = price_list[0].get('plain_text', '0.0') if price_list else '0.0'
 
                 percent_list = relation_props.get('漲跌幅', {}).get('rich_text', [])
-                row_of_want_to_follow_company_percent = percent_list[0].get('plain_text', '--') if percent_list else '--'   
+                row_of_want_to_follow_company_percent = percent_list[0].get('plain_text', '--') if percent_list else '--'
             else:
                 # 如果使用者沒有關聯任何公司，就跳過這一列
                 logger.warning(f"在資料庫 '{data_source_id}' 中發現一列 '{row_name}' 沒有關聯 '想追蹤的公司'，已跳過。")
