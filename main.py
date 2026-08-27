@@ -23,6 +23,7 @@ from utils.helpers import get_price_safely
 from workers.api_worker import API_Worker
 from workers.notion_worker import Notion_update_worker
 from utils.mail_sender import EmailSender
+from utils.discord_notifier import send_discord_message
 from fugle_marketdata import RestClient # 確保導入 RestClient
 
 # --- 系統日誌設定(修改成有一個info以上和debug以上的各一個) ---
@@ -452,6 +453,7 @@ def run_post_market_tasks(
 
 if __name__ == "__main__":
     logger.info("=============== 系統啟動 ===============")
+    send_discord_message("今天股市機器人有執行")
     try:
         with open(config.BASE_DATA_FILE, 'r', encoding='utf-8') as f:
             base_data = json.load(f)

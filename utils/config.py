@@ -75,6 +75,9 @@ FUBON_PASSWORD = os.getenv("FUBON_PASSWORD")
 # 憑證 .pfx 路徑；預設指向 information/ 下的憑證檔（.pfx 已被 gitignore，不進版控）
 FUBON_CERT_PATH = os.getenv("FUBON_CERT_PATH", "information/client.pfx")
 
+# -- Discord Webhook（程式啟動時發送通知）--
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+
 # 富邦快照要查詢並「合併」成單一查表的市場別。
 # 監控清單含上市(TSE)與創新板(TIB)，且為防未來加上櫃/興櫃，預設一次涵蓋四個板。
 # 注意：創新板(如 8487 愛爾達-創)獨立於 TSE，只查 TSE 會漏掉。PSB(興櫃戰略新板)目前 0 檔，略過。
